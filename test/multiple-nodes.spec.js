@@ -8,7 +8,7 @@ const expect = chai.expect
 const promisify = require('promisify-es6')
 const uint8ArrayFromString = require('uint8arrays/from-string')
 
-const { GossipsubID: multicodec } = require('../src/constants')
+const { GossipsubIDv10: multicodec } = require('../src/constants')
 const {
   createGossipsubNodes,
   expectSet,

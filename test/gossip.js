@@ -5,7 +5,7 @@ const { expect } = require('chai')
 const sinon = require('sinon')
 const uint8ArrayFromString = require('uint8arrays/from-string')
 
-const { GossipsubID: multicodec, GossipsubDhi } = require('../src/constants')
+const { GossipsubIDv10: multicodec, GossipsubDhi } = require('../src/constants')
 const {
   first,
   createGossipsubNodes,

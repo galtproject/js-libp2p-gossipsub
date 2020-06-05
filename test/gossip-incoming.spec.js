@@ -8,7 +8,7 @@ const expect = chai.expect
 const uint8ArrayFromString = require('uint8arrays/from-string')
 
 
-const { GossipsubID: multicodec } = require('../src/constants')
+const { GossipsubIDv10: multicodec } = require('../src/constants')
 const { createGossipsubConnectedNodes } = require('./utils')
 
 const shouldNotHappen = (msg) => expect.fail()
