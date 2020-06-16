@@ -12,14 +12,15 @@ const uint8ArrayEquals = require('uint8arrays/equals')
 const { utils } = require('libp2p-pubsub')
 const {
   createGossipsub,
-  mockRegistrar
+  mockRegistrar,
+  mockConnectionManager
 } = require('./utils')
 
 describe('Pubsub', () => {
   let gossipsub
 
   before(async () => {
-    gossipsub = await createGossipsub(mockRegistrar, true)
+    gossipsub = await createGossipsub(mockRegistrar, mockConnectionManager, true)
   })
 
   after(() => gossipsub.stop())

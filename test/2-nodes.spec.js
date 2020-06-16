@@ -15,6 +15,7 @@ const {
   createGossipsubNodes,
   createGossipsubConnectedNodes,
   mockRegistrar,
+  mockConnectionManager,
   expectSet,
   ConnectionPair,
   first
@@ -27,7 +28,7 @@ describe('1 node', () => {
     let gossipsub
 
     before(async () => {
-      gossipsub = await createGossipsub(mockRegistrar)
+      gossipsub = await createGossipsub(mockRegistrar, mockConnectionManager)
     })
 
     after(() => gossipsub.stop())
