@@ -9,7 +9,10 @@ const uint8ArrayFromString = require('uint8arrays/from-string')
 
 
 const { GossipsubIDv10: multicodec } = require('../src/constants')
-const { createGossipsubConnectedNodes } = require('./utils')
+const {
+  createConnectedGossipsubs,
+  stopNode
+} = require('./utils')
 
 const shouldNotHappen = (msg) => expect.fail()
 
@@ -20,7 +23,7 @@ describe('gossip incoming', () => {
   describe('gossipIncoming == true', () => {
     // Create pubsub nodes
     before(async () => {
-      nodes = await createGossipsubConnectedNodes(3, multicodec)
+      nodes = await createConnectedGossipsubs({ number: 3 })
     })
 
     // Create subscriptions
@@ -38,7 +41,7 @@ describe('gossip incoming', () => {
       ])
     })
 
-    after(() => Promise.all(nodes.map((n) => n.stop())))
+    after(() => Promise.all(nodes.map(stopNode)))
 
     it('should gossip incoming messages', async () => {
       const promise = new Promise((resolve) => nodes[2].once(topic, resolve))
@@ -58,7 +61,7 @@ describe('gossip incoming', () => {
   describe('gossipIncoming == false', () => {
     // Create pubsub nodes
     before(async () => {
-      nodes = await createGossipsubConnectedNodes(3, multicodec, { gossipIncoming: false })
+      nodes = await createConnectedGossipsubs({ number: 3, options: { gossipIncoming: false } })
     })
 
     // Create subscriptions
@@ -76,7 +79,7 @@ describe('gossip incoming', () => {
       ])
     })
 
-    after(() => Promise.all(nodes.map((n) => n.stop())))
+    after(() => Promise.all(nodes.map(stopNode)))
 
     it('should not gossip incoming messages', async () => {
       nodes[2].once(topic, (m) => shouldNotHappen)
