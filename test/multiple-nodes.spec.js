@@ -5,10 +5,11 @@
 const chai = require('chai')
 chai.use(require('dirty-chai'))
 const expect = chai.expect
+
+const delay = require('delay')
 const promisify = require('promisify-es6')
 const uint8ArrayFromString = require('uint8arrays/from-string')
 
-const { GossipsubIDv10: multicodec } = require('../src/constants')
 const {
   createGossipsubs,
   expectSet,
@@ -50,7 +51,7 @@ describe('multiple nodes (more than 2)', () => {
           expectSet(b.subscriptions, [topic])
           expectSet(c.subscriptions, [topic])
 
-          await new Promise((resolve) => setTimeout(resolve, 30))
+          await delay(30)
 
           await Promise.all([
             promisify(a.once.bind(a))('gossipsub:heartbeat'),
@@ -242,7 +243,7 @@ describe('multiple nodes (more than 2)', () => {
         e.subscribe(topic)
 
         // give time for subscription propagation
-        await new Promise((resolve) => setTimeout(resolve, 30))
+        await delay(30)
 
         await Promise.all([
           promisify(a.once.bind(a))('gossipsub:heartbeat'),

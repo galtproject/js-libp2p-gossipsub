@@ -3,6 +3,8 @@
 
 const { expect } = require('chai')
 const sinon = require('sinon')
+
+const delay = require('delay')
 const uint8ArrayFromString = require('uint8arrays/from-string')
 
 const { GossipsubDhi } = require('../src/constants')
@@ -32,11 +34,11 @@ describe('gossip', () => {
 
     await connectGossipsubs(nodes)
     // await subscription propagation
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await delay(50)
 
     // await mesh rebalancing
     await Promise.all(nodes.map((n) => new Promise((resolve) => n.once('gossipsub:heartbeat', resolve))))
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await delay(500)
     // set spy
     sinon.spy(nodeA, '_pushGossip')
 
@@ -67,10 +69,10 @@ describe('gossip', () => {
 
     // every node connected to every other
     await connectGossipsubs(nodes)
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await delay(500)
     // await mesh rebalancing
     await Promise.all(nodes.map((n) => new Promise((resolve) => n.once('gossipsub:heartbeat', resolve))))
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await delay(500)
 
     const peerB = first(nodeA.mesh.get(topic))
     const nodeB = nodes.find((n) => n.peerId.toB58String() === peerB.id.toB58String())

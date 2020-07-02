@@ -6,6 +6,8 @@ const chai = require('chai')
 chai.use(require('dirty-chai'))
 const expect = chai.expect
 const sinon = require('sinon')
+
+const delay = require('delay')
 const uint8ArrayFromString = require('uint8arrays/from-string')
 const uint8ArrayEquals = require('uint8arrays/equals')
 
@@ -161,7 +163,7 @@ describe('Pubsub', () => {
 
       // process valid message
       gossipsub._processRpc(peer.id.toB58String(), peer, validRpc)
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await delay(500)
       expect(gossipsub.validate.callCount).to.eql(1)
       expect(await gossipsub.validate.getCall(0).returnValue).to.eql(true)
 
@@ -178,7 +180,7 @@ describe('Pubsub', () => {
 
       // process invalid message
       gossipsub._processRpc(peer.id.toB58String(), peer, invalidRpc)
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await delay(500)
       expect(gossipsub.validate.callCount).to.eql(2)
       expect(await gossipsub.validate.getCall(1).returnValue).to.eql(false)
 
@@ -198,7 +200,7 @@ describe('Pubsub', () => {
 
       // process previously invalid message, now is valid
       gossipsub._processRpc(peer.id.toB58String(), peer, invalidRpc2)
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await delay(500)
       expect(gossipsub.validate.callCount).to.eql(3)
       expect(await gossipsub.validate.getCall(2).returnValue).to.eql(true)
     })

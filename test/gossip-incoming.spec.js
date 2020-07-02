@@ -5,10 +5,10 @@ const chai = require('chai')
 chai.use(require('dirty-chai'))
 chai.use(require('chai-spies'))
 const expect = chai.expect
+
+const delay = require('delay')
 const uint8ArrayFromString = require('uint8arrays/from-string')
 
-
-const { GossipsubIDv10: multicodec } = require('../src/constants')
 const {
   createConnectedGossipsubs,
   stopNode
@@ -86,7 +86,7 @@ describe('gossip incoming', () => {
 
       nodes[0].publish(topic, uint8ArrayFromString('hey'))
 
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await delay(1000)
 
       nodes[2].removeListener(topic, shouldNotHappen)
     })

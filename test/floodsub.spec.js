@@ -3,13 +3,13 @@
 
 const chai = require('chai')
 chai.use(require('dirty-chai'))
+
+const delay = require('delay')
 const uint8ArrayFromString = require('uint8arrays/from-string')
 
 const expect = chai.expect
 const times = require('lodash/times')
 const PeerId = require('peer-id')
-
-const { multicodec: floodsubMulticodec } = require('libp2p-floodsub')
 
 const Gossipsub = require('../src')
 const {
@@ -119,7 +119,7 @@ describe('gossipsub fallbacks to floodsub', () => {
       const [changedPeerId, changedTopics, changedSubs] = await new Promise((resolve) => {
         nodeGs.once('pubsub:subscription-change', (...args) => resolve(args))
       })
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await delay(1000)
 
       expectSet(nodeGs.subscriptions, [topic])
       expectSet(nodeFs.subscriptions, [topic])
@@ -277,7 +277,7 @@ describe('gossipsub fallbacks to floodsub', () => {
         new Promise((resolve) => nodeFs.once('floodsub:subscription-change', resolve))
       ])
       // allow subscriptions to propagate to the other peer
-      await new Promise(resolve => setTimeout(resolve, 10))
+      await delay(10)
     })
 
     afterEach(async function () {
