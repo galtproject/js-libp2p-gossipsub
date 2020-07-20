@@ -41,13 +41,8 @@
     "debug": "^4.1.1",
     "denque": "^1.4.1",
     "err-code": "^2.0.0",
-    "it-length-prefixed": "^3.0.0",
     "it-pipe": "^1.0.1",
-<<<<<<< HEAD
     "libp2p-pubsub": "^0.6.0",
-=======
-    "libp2p-pubsub": "~0.5.3",
->>>>>>> chore: update libp2p-pubsub dependency
     "p-map": "^4.0.0",
     "peer-id": "^0.14.0",
     "protons": "^2.0.0",

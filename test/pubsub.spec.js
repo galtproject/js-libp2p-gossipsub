@@ -12,7 +12,7 @@ const uint8ArrayFromString = require('uint8arrays/from-string')
 const uint8ArrayEquals = require('uint8arrays/equals')
 
 const { utils } = require('libp2p-pubsub')
-const Peer = require('libp2p-pubsub/src/peer')
+const PeerStreams = require('libp2p-pubsub/src/peerStreams')
 const { signMessage } = require('libp2p-pubsub/src/message/sign')
 const PeerId = require('peer-id')
 
@@ -44,21 +44,23 @@ describe('Pubsub', () => {
       await gossipsub.publish('signing-topic', uint8ArrayFromString('hello'))
 
       // Get the first message sent to _publish, and validate it
-      const signedMessage = gossipsub._publish.getCall(0).lastArg[0]
-      const isValid = await gossipsub.validate(signedMessage)
-
-      expect(isValid).to.eql(true)
+      const signedMessage = await gossipsub._buildMessage(gossipsub._publish.getCall(0).lastArg)
+      try {
+        await gossipsub.validate(signedMessage)
+      } catch (e) {
+        expect.fail("validation should not throw")
+      }
     })
   })
 
   describe('validate', () => {
     it('should drop unsigned messages', async () => {
       sinon.spy(gossipsub, '_processRpcMessage')
-      sinon.spy(gossipsub, 'validate')
+      sinon.spy(gossipsub, '_publishFrom')
       sinon.stub(gossipsub.peers, 'get').returns({})
 
       const topic = 'my-topic'
-      const peer = new Peer({ id: await PeerId.create() })
+      const peer = new PeerStreams({ id: await PeerId.create() })
       const rpc = {
         subscriptions: [],
         msgs: [{
@@ -72,26 +74,25 @@ describe('Pubsub', () => {
       gossipsub._processRpc(peer.id.toB58String(), peer, rpc)
 
       return new Promise(resolve => setTimeout(async () => {
-        expect(gossipsub.validate.callCount).to.eql(1)
-        expect(await gossipsub.validate.getCall(0).returnValue).to.eql(false)
+        expect(gossipsub._publishFrom.callCount).to.eql(0)
         resolve()
       }, 500))
     })
 
     it('should not drop signed messages', async () => {
       sinon.spy(gossipsub, '_processRpcMessage')
-      sinon.spy(gossipsub, 'validate')
+      sinon.spy(gossipsub, '_publishFrom')
       sinon.stub(gossipsub.peers, 'get').returns({})
 
       const topic = 'my-topic'
-      const peer = new Peer({ id: await PeerId.create() })
+      const peer = new PeerStreams({ id: await PeerId.create() })
       let signedMessage = {
         from: peer.id.toBytes(),
         data: uint8ArrayFromString('an unsigned message'),
         seqno: utils.randomSeqno(),
         topicIDs: [topic]
       }
-      signedMessage = await signMessage(peer.id, signedMessage)
+      signedMessage = await signMessage(peer.id, utils.normalizeOutRpcMessage(signedMessage))
 
       const rpc = {
         subscriptions: [],
@@ -101,21 +102,20 @@ describe('Pubsub', () => {
       gossipsub._processRpc(peer.id.toB58String(), peer, rpc)
 
       return new Promise(resolve => setTimeout(async () => {
-        expect(gossipsub.validate.callCount).to.eql(1)
-        expect(await gossipsub.validate.getCall(0).returnValue).to.be.eql(true)
+        expect(gossipsub._publishFrom.callCount).to.eql(1)
         resolve()
       }, 500))
     })
 
     it('should not drop unsigned messages if strict signing is disabled', async () => {
       sinon.spy(gossipsub, '_processRpcMessage')
-      sinon.spy(gossipsub, 'validate')
+      sinon.spy(gossipsub, '_publishFrom')
       sinon.stub(gossipsub.peers, 'get').returns({})
       // Disable strict signing
       sinon.stub(gossipsub, 'strictSigning').value(false)
 
       const topic = 'my-topic'
-      const peer = new Peer({ id: await PeerId.create() })
+      const peer = new PeerStreams({ id: await PeerId.create() })
       const rpc = {
         subscriptions: [],
         msgs: [{
@@ -129,8 +129,7 @@ describe('Pubsub', () => {
       gossipsub._processRpc(peer.id.toB58String(), peer, rpc)
 
       return new Promise(resolve => setTimeout(async () => {
-        expect(gossipsub.validate.callCount).to.eql(1)
-        expect(await gossipsub.validate.getCall(0).returnValue).to.eql(true)
+        expect(gossipsub._publishFrom.callCount).to.eql(1)
         resolve()
       }, 500))
     })
@@ -138,13 +137,13 @@ describe('Pubsub', () => {
 
   describe('topic validators', () => {
     it('should filter messages by topic validator', async () => {
-      // use validate.getCall(0).returnValue to see if a message is valid or not
-      sinon.spy(gossipsub, 'validate')
+      // use _publishFrom.callCount() to see if a message is valid or not
+      sinon.spy(gossipsub, '_publishFrom')
       // Disable strict signing
       sinon.stub(gossipsub, 'strictSigning').value(false)
       sinon.stub(gossipsub.peers, 'get').returns({})
       const filteredTopic = 't'
-      const peer = new Peer({ id: await PeerId.create() })
+      const peer = new PeerStreams({ id: await PeerId.create() })
 
       // Set a trivial topic validator
       gossipsub.topicValidators.set(filteredTopic, (topic, peer, message) => {
@@ -165,8 +164,7 @@ describe('Pubsub', () => {
       // process valid message
       gossipsub._processRpc(peer.id.toB58String(), peer, validRpc)
       await delay(500)
-      expect(gossipsub.validate.callCount).to.eql(1)
-      expect(await gossipsub.validate.getCall(0).returnValue).to.eql(true)
+      expect(gossipsub._publishFrom.callCount).to.eql(1)
 
       // invalid case
       const invalidRpc = {
@@ -182,8 +180,7 @@ describe('Pubsub', () => {
       // process invalid message
       gossipsub._processRpc(peer.id.toB58String(), peer, invalidRpc)
       await delay(500)
-      expect(gossipsub.validate.callCount).to.eql(2)
-      expect(await gossipsub.validate.getCall(1).returnValue).to.eql(false)
+      expect(gossipsub._publishFrom.callCount).to.eql(1)
 
       // remove topic validator
       gossipsub.topicValidators.delete(filteredTopic)
@@ -202,8 +199,7 @@ describe('Pubsub', () => {
       // process previously invalid message, now is valid
       gossipsub._processRpc(peer.id.toB58String(), peer, invalidRpc2)
       await delay(500)
-      expect(gossipsub.validate.callCount).to.eql(3)
-      expect(await gossipsub.validate.getCall(2).returnValue).to.eql(true)
+      expect(gossipsub._publishFrom.callCount).to.eql(2)
     })
   })
 })

@@ -116,7 +116,7 @@ describe('gossipsub fallbacks to floodsub', () => {
       nodeFs.subscribe(topic)
 
       // await subscription change
-      const [changedPeerId, changedTopics, changedSubs] = await new Promise((resolve) => {
+      const [changedPeerId, changedSubs] = await new Promise((resolve) => {
         nodeGs.once('pubsub:subscription-change', (...args) => resolve(args))
       })
       await delay(1000)
@@ -125,11 +125,10 @@ describe('gossipsub fallbacks to floodsub', () => {
       expectSet(nodeFs.subscriptions, [topic])
       expect(nodeGs.peers.size).to.equal(1)
       expect(nodeFs.peers.size).to.equal(1)
-      expectSet(first(nodeGs.peers).topics, [topic])
+      expectSet(nodeGs.topics.get(topic), [nodeFs.peerId.toB58String()])
       expectSet(first(nodeFs.peers).topics, [topic])
 
       expect(changedPeerId.toB58String()).to.equal(first(nodeGs.peers).id.toB58String())
-      expectSet(changedTopics, [topic])
       expect(changedSubs).to.be.eql([{ topicID: topic, subscribe: true }])
     })
   })
@@ -248,7 +247,7 @@ describe('gossipsub fallbacks to floodsub', () => {
 
       const msgs = []
       times(10, (index) => msgs.push(uint8ArrayFromString('banana ' + index)))
-      nodeGs.publish(topic, msgs)
+      msgs.forEach(msg => nodeGs.publish(topic, msg))
     })
   })
 
