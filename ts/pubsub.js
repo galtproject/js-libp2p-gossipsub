@@ -79,13 +79,10 @@ class BasicPubSub extends Pubsub {
    */
   async _onPeerConnected (peerId, conn) {
     await super._onPeerConnected(peerId, conn)
-    const idB58Str = peerId.toB58String()
-    const peerStreams = this.peers.get(idB58Str)
+    const id = peerId.toB58String()
 
-    if (peerStreams && peerStreams.isWritable) {
-      // Immediately send my own subscriptions to the newly established conn
-      this._sendSubscriptions(peerStreams, Array.from(this.subscriptions), true)
-    }
+    // Immediately send my own subscriptions to the newly established conn
+    this._sendSubscriptions(id, Array.from(this.subscriptions), true)
   }
 
   /**
@@ -311,7 +308,7 @@ class BasicPubSub extends Pubsub {
     })
 
     // Broadcast SUBSCRIBE to all peers
-    this.peers.forEach((peer) => this._sendSubscriptions(peer, topics, true))
+    this.peers.forEach((_, id) => this._sendSubscriptions(id, topics, true))
   }
 
   /**
@@ -347,7 +344,7 @@ class BasicPubSub extends Pubsub {
     })
 
     // Broadcast UNSUBSCRIBE to all peers ready
-    this.peers.forEach((peer) => this._sendSubscriptions(peer, topics, false))
+    this.peers.forEach((_, id) => this._sendSubscriptions(id, topics, false))
   }
 
   /**
@@ -416,11 +413,12 @@ class BasicPubSub extends Pubsub {
 
   /**
    * Send an rpc object to a peer
-   * @param {PeerStreams} peerStreams
+   * @param {string} id peer id
    * @param {RPC} rpc
    * @returns {void}
    */
-  _sendRpc (peerStreams, rpc) {
+  _sendRpc (id, rpc) {
+    const peerStreams = this.peers.get(id)
     if (!peerStreams || !peerStreams.isWritable) {
       return
     }
@@ -429,13 +427,13 @@ class BasicPubSub extends Pubsub {
 
   /**
    * Send subscroptions to a peer
-   * @param {PeerStreams} peerStreams
+   * @param {string} id peer id
    * @param {string[]} topics
    * @param {boolean} subscribe set to false for unsubscriptions
    * @returns {void}
    */
-  _sendSubscriptions (peerStreams, topics, subscribe) {
-    return this._sendRpc(peerStreams, {
+  _sendSubscriptions (id, topics, subscribe) {
+    return this._sendRpc(id, {
       subscriptions: topics.map(t => ({ topicID: t, subscribe: subscribe }))
     })
   }
