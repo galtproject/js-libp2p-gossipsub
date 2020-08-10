@@ -434,6 +434,9 @@ class BasicPubSub extends Pubsub {
    * @returns {void}
    */
   _sendSubscriptions (id, topics, subscribe) {
+    if (!topics.length) {
+      return
+    }
     return this._sendRpc(id, {
       subscriptions: topics.map(t => ({ topicID: t, subscribe: subscribe }))
     })
