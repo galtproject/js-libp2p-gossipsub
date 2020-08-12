@@ -70,7 +70,7 @@ const awaitEvents = (emitter, event, number, timeout = 10000) => {
   })
 }
 
-describe.only("go-libp2p-pubsub gossipsub tests", function () {
+describe("go-libp2p-pubsub gossipsub tests", function () {
   this.timeout(100000)
   afterEach(() => {
     sinon.restore()

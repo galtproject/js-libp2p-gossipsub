@@ -18,6 +18,8 @@ const Gossipsub = require('../src')
 const { ERR_TOPIC_VALIDATOR_REJECT } = require('../src/constants')
 const {
   createPeer,
+  createGossipsubs,
+  denseConnect,
   startNode,
   stopNode
 } = require('./utils')
@@ -202,5 +204,50 @@ describe('Pubsub', () => {
       await delay(500)
       expect(gossipsub._publishFrom.callCount).to.eql(2)
     })
+  })
+})
+
+const awaitEvents = (emitter, event, number, timeout = 10000) => {
+  return new Promise((resolve, reject) => {
+    let cb;
+    let counter = 0;
+    const t = setTimeout(() => {
+      emitter.off(event, cb)
+      reject(new Error(`${counter} of ${number} '${event}' events received`))
+    }, timeout)
+    cb = () => {
+      counter++
+      if (counter >= number) {
+        clearTimeout(t)
+        emitter.off(event, cb)
+        resolve()
+      }
+    }
+    emitter.on(event, cb)
+  })
+}
+
+describe.only("sanity tests", () => {
+  it("should receive all subscriptions sent", async function () {
+    this.timeout(100000)
+    // Create 7 peers
+    // densely connect
+    // send subscription from one peer
+    // ensure subscriptions are processed by other connected peers
+    const psubs = await createGossipsubs({
+      number: 7,
+      options: { scoreParams: { IPColocationFactorThreshold: 7 } }
+    })
+    const topic = 'foobar'
+
+    await denseConnect(psubs)
+
+    const connectedPeerIds = Array.from(psubs[0].peers.keys())
+    const connectedPsubs = psubs.filter(ps => connectedPeerIds.includes(ps.peerId.toB58String()))
+    const subscriptionReceived = Promise.all(
+      connectedPsubs.map(ps => awaitEvents(ps, "pubsub:subscription-change", 1))
+    )
+    psubs[0].subscribe('foobar')
+    await subscriptionReceived
   })
 })
