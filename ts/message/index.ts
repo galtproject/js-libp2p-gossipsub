@@ -113,7 +113,7 @@ export interface ControlPrune {
 }
 
 export interface PeerInfo {
-  peerID?: Buffer
+  peerID?: Uint8Array
   signedPeerRecord?: Buffer
 }
 
