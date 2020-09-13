@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-ignore
-import { utils } from 'libp2p-interfaces/src/pubsub'
+import PeerId from 'peer-id'
+import Pubsub, { utils } from 'libp2p-interfaces/src/pubsub'
 import { MessageCache } from './message-cache'
 import {
   RPCCodec,
@@ -11,17 +11,15 @@ import * as constants from './constants'
 import { Heartbeat } from './heartbeat'
 import { getGossipPeers } from './get-gossip-peers'
 import { createGossipRpc, shuffle, hasGossipProtocol } from './utils'
-import PeerStreams from 'libp2p-interfaces/src/pubsub/peer-streams';
+import PeerStreams from 'libp2p-interfaces/src/pubsub/peer-streams'
 import { PeerScore, PeerScoreParams, PeerScoreThresholds, createPeerScoreParams, createPeerScoreThresholds } from './score'
 import { IWantTracer } from './tracer'
 import { AddrInfo, Libp2p, EnvelopeClass } from './interfaces'
 import { Debugger } from 'debug'
 // @ts-ignore
 import TimeCache = require('time-cache')
-import PeerId from 'peer-id'
 // @ts-ignore
 import Envelope = require('libp2p/src/record/envelope')
-import Pubsub from "libp2p-interfaces/src/pubsub"
 
 interface GossipInputOptions {
   emitSelf: boolean
