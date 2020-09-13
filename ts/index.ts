@@ -11,18 +11,17 @@ import * as constants from './constants'
 import { Heartbeat } from './heartbeat'
 import { getGossipPeers } from './get-gossip-peers'
 import { createGossipRpc, shuffle, hasGossipProtocol } from './utils'
-import { PeerStreams } from './peer-streams'
+import PeerStreams from 'libp2p-interfaces/src/pubsub/peer-streams';
 import { PeerScore, PeerScoreParams, PeerScoreThresholds, createPeerScoreParams, createPeerScoreThresholds } from './score'
 import { IWantTracer } from './tracer'
 import { AddrInfo, Libp2p, EnvelopeClass } from './interfaces'
 import { Debugger } from 'debug'
 // @ts-ignore
 import TimeCache = require('time-cache')
-import PeerId = require('peer-id')
+import PeerId from 'peer-id'
 // @ts-ignore
 import Envelope = require('libp2p/src/record/envelope')
-// @ts-ignore
-import Pubsub = require('libp2p-interfaces/src/pubsub')
+import Pubsub from "libp2p-interfaces/src/pubsub"
 
 interface GossipInputOptions {
   emitSelf: boolean
@@ -238,7 +237,7 @@ class Gossipsub extends Pubsub {
     /**
      * Use the overriden mesgIdFn or the default one.
      */
-    this.defaultMsgIdFn = (msg : InMessage) => utils.msgId(msg.from, msg.seqno)
+    this.defaultMsgIdFn = (msg : InMessage) => utils.msgId(msg.from!, msg.seqno!)
     this._msgIdFn = options.msgIdFn || this.defaultMsgIdFn
 
     /**
@@ -319,7 +318,7 @@ class Gossipsub extends Pubsub {
         }
       }
     }
-    this.outbound.set(p, outbound)
+    this.outbound.set(p.id.toB58String(), outbound)
 
     return p
   }

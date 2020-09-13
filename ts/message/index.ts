@@ -35,7 +35,7 @@ export interface Message {
   /**
    * Opaque blob of data
    */
-  data?: Uint8Array
+  data: Uint8Array
   /**
    * 64-bit big-endian uint
    *
@@ -74,7 +74,7 @@ export type InMessage = Overwrite<Message, {
   /**
    * Base58-encoded peer id
    */
-  from?: string
+  from: string
 }>
 
 /**
