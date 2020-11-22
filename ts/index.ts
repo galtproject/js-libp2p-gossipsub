@@ -67,6 +67,7 @@ interface GossipOptions extends GossipInputOptions {
 }
 
 class Gossipsub extends Pubsub {
+  // @ts-ignore
   peers: Map<string, PeerStreams>
   direct: Set<string>
   seenCache: TimeCache
@@ -238,6 +239,7 @@ class Gossipsub extends Pubsub {
     /**
      * Use the overriden mesgIdFn or the default one.
      */
+    // @ts-ignore
     this.defaultMsgIdFn = (msg : InMessage) => utils.msgId(msg.from, msg.seqno)
     this._msgIdFn = options.msgIdFn || this.defaultMsgIdFn
 
@@ -274,6 +276,14 @@ class Gossipsub extends Pubsub {
     this.score = new PeerScore(this._options.scoreParams, libp2p.connectionManager, this._msgIdFn)
   }
 
+  emitMessage (message: any): void {
+    return this._emitMessage(message)
+  }
+
+  buildMessage (message: any): Promise<any> {
+    return this._buildMessage(message)
+  }
+
   /**
    * Decode a Uint8Array into an RPC object
    * Overrided to use an extended protocol-specific protobuf decoder
@@ -303,6 +313,7 @@ class Gossipsub extends Pubsub {
    * @param {string} protocol
    * @returns {PeerStreams}
    */
+  // @ts-ignore
   _addPeer (peerId: PeerId, protocol: string): PeerStreams {
     const p = super._addPeer(peerId, protocol)
 
@@ -319,8 +330,10 @@ class Gossipsub extends Pubsub {
         }
       }
     }
+    // @ts-ignore
     this.outbound.set(p, outbound)
 
+    // @ts-ignore
     return p
   }
 
@@ -330,6 +343,7 @@ class Gossipsub extends Pubsub {
    * @param {PeerId} peer
    * @returns {Peer}
    */
+  // @ts-ignore
   _removePeer (peerId: PeerId): PeerStreams {
     const peerStreams = super._removePeer(peerId)
     const id = peerId.toB58String()
@@ -356,6 +370,7 @@ class Gossipsub extends Pubsub {
     // Remove from peer scoring
     this.score.removePeer(id)
 
+    // @ts-ignore
     return peerStreams
   }
 
@@ -368,7 +383,9 @@ class Gossipsub extends Pubsub {
    * @param {RPC} rpc
    * @returns {boolean}
    */
+  // @ts-ignore
   _processRpc (id: string, peerStreams: PeerStreams, rpc: RPC): boolean {
+    // @ts-ignore
     if (super._processRpc(id, peerStreams, rpc)) {
       if (rpc.control) {
         this._processRpcControlMessage(id, rpc.control)
@@ -409,6 +426,7 @@ class Gossipsub extends Pubsub {
    * @param {InMessage} msg
    * @returns {Promise<void>}
    */
+  // @ts-ignore
   async _processRpcMessage (msg: InMessage): Promise<void> {
     const msgID = this.getMsgId(msg)
 
@@ -420,6 +438,7 @@ class Gossipsub extends Pubsub {
     this.seenCache.put(msgID)
 
     this.score.validateMessage(msg)
+    // @ts-ignore
     await super._processRpcMessage(msg)
   }
 
@@ -439,8 +458,10 @@ class Gossipsub extends Pubsub {
    * @param {InMessage} message
    * @returns {Promise<void>}
    */
+  // @ts-ignore
   async validate (message: InMessage): Promise<void> {
     try {
+      // @ts-ignore
       await super.validate(message)
     } catch (e) {
       this.score.rejectMessage(message, e.code)
@@ -1026,6 +1047,7 @@ class Gossipsub extends Pubsub {
    * @param {InMessage} msg
    * @returns {void}
    */
+  // @ts-ignore
   async _publish (msg: InMessage): Promise<void> {
     if (msg.receivedFrom !== this.peerId.toB58String()) {
       this.score.deliverMessage(msg)
