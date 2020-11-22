@@ -1,0 +1,6 @@
+.github
+benchmarks
+dist
+node_modules
+src
+test
