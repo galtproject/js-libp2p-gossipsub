@@ -276,13 +276,13 @@ class Gossipsub extends Pubsub {
     this.score = new PeerScore(this._options.scoreParams, libp2p.connectionManager, this._msgIdFn)
   }
 
-  emitMessage (message: any): void {
-    return this._emitMessage(message)
-  }
-
-  buildMessage (message: any): Promise<any> {
-    return this._buildMessage(message)
-  }
+  // emitMessage (message: any): void {
+  //   return this._emitMessage(message)
+  // }
+  //
+  // buildMessage (message: any): Promise<any> {
+  //   return this._buildMessage(message)
+  // }
 
   /**
    * Decode a Uint8Array into an RPC object
