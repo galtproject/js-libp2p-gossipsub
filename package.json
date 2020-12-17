@@ -1,6 +1,6 @@
 {
   "name": "@galtproject/libp2p-gossipsub",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "A typescript implementation of gossipsub",
   "leadMaintainer": "Cayman Nava <caymannava@gmail.com>",
   "main": "src/index.js",
