@@ -1,37 +1,35 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-ignore
-import { utils } from 'libp2p-interfaces/src/pubsub'
+import Pubsub, { InMessage, utils } from 'libp2p-interfaces/src/pubsub'
 import { MessageCache } from './message-cache'
-import {
-  RPCCodec,
-  RPC, Message, InMessage,
-  ControlMessage, ControlIHave, ControlGraft, ControlIWant, ControlPrune, PeerInfo
-} from './message'
+import { RPC, IRPC } from './message/rpc'
 import * as constants from './constants'
 import { Heartbeat } from './heartbeat'
 import { getGossipPeers } from './get-gossip-peers'
-import { createGossipRpc, shuffle, hasGossipProtocol } from './utils'
-import { PeerStreams } from './peer-streams'
+import { createGossipRpc, shuffle, hasGossipProtocol, messageIdToString } from './utils'
 import { PeerScore, PeerScoreParams, PeerScoreThresholds, createPeerScoreParams, createPeerScoreThresholds } from './score'
 import { IWantTracer } from './tracer'
-import { AddrInfo, Libp2p, EnvelopeClass } from './interfaces'
+import { AddrInfo, MessageIdFunction } from './interfaces'
 import { Debugger } from 'debug'
+import Libp2p from 'libp2p'
+
+import PeerStreams from 'libp2p-interfaces/src/pubsub/peer-streams'
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import TimeCache = require('time-cache')
 import PeerId = require('peer-id')
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import Envelope = require('libp2p/src/record/envelope')
-// @ts-ignore
-import Pubsub = require('libp2p-interfaces/src/pubsub')
 
 interface GossipInputOptions {
   emitSelf: boolean
+  canRelayMessage: boolean
   gossipIncoming: boolean
   fallbackToFloodsub: boolean
   floodPublish: boolean
   doPX: boolean
-  msgIdFn: (msg: InMessage) => string
+  msgIdFn: MessageIdFunction
   messageCache: MessageCache
+  globalSignaturePolicy: 'StrictSign' | 'StrictNoSign' | undefined
   scoreParams: Partial<PeerScoreParams>
   scoreThresholds: Partial<PeerScoreThresholds>
   directPeers: AddrInfo[]
@@ -75,14 +73,14 @@ class Gossipsub extends Pubsub {
   mesh: Map<string, Set<string>>
   fanout: Map<string, Set<string>>
   lastpub: Map<string, number>
-  gossip: Map<string, ControlIHave[]>
-  control: Map<string, ControlMessage>
+  gossip: Map<string, RPC.IControlIHave[]>
+  control: Map<string, RPC.IControlMessage>
   peerhave:Map<string, number>
   iasked:Map<string, number>
   backoff: Map<string, Map<string, number>>
   outbound: Map<string, boolean>
-  defaultMsgIdFn: (msg: InMessage) => string
-  _msgIdFn: (msg: InMessage) => string
+  defaultMsgIdFn: MessageIdFunction
+  _msgIdFn: MessageIdFunction
   messageCache: MessageCache
   score: PeerScore
   heartbeat: Heartbeat
@@ -95,9 +93,9 @@ class Gossipsub extends Pubsub {
   _libp2p: Libp2p
   _options: GossipOptions
   _directPeerInitial: NodeJS.Timeout
-  log: Debugger
+  log: Debugger & { err: Debugger }
   // eslint-disable-next-line @typescript-eslint/ban-types
-  emit: (...args: any) => void
+  emit: (event: string | symbol, ...args: any[]) => boolean
 
   public static multicodec: string = constants.GossipsubIDv11
 
@@ -105,13 +103,14 @@ class Gossipsub extends Pubsub {
   /**
    * @param {Libp2p} libp2p
    * @param {Object} [options]
-   * @param {bool} [options.emitSelf] if publish should emit to self, if subscribed, defaults to false
-   * @param {bool} [options.gossipIncoming] if incoming messages on a subscribed topic should be automatically gossiped, defaults to true
-   * @param {bool} [options.fallbackToFloodsub] if dial should fallback to floodsub, defaults to true
-   * @param {bool} [options.floodPublish] if self-published messages should be sent to all peers, defaults to true
-   * @param {bool} [options.doPX] whether PX is enabled; this should be enabled in bootstrappers and other well connected/trusted nodes. defaults to false
-   * @param {function} [options.msgIdFn] override the default message id function
+   * @param {boolean} [options.emitSelf = false] if publish should emit to self, if subscribed
+   * @param {boolean} [options.canRelayMessage = false] - if can relay messages not subscribed
+   * @param {boolean} [options.gossipIncoming = true] if incoming messages on a subscribed topic should be automatically gossiped
+   * @param {boolean} [options.fallbackToFloodsub = true] if dial should fallback to floodsub
+   * @param {boolean} [options.floodPublish = true] if self-published messages should be sent to all peers
+   * @param {boolean} [options.doPX = false] whether PX is enabled; this should be enabled in bootstrappers and other well connected/trusted nodes.
    * @param {Object} [options.messageCache] override the default MessageCache
+   * @param {string} [options.globalSignaturePolicy = "StrictSign"] signing policy to apply across all messages
    * @param {Object} [options.scoreParams] peer score parameters
    * @param {Object} [options.scoreThresholds] peer score thresholds
    * @param {AddrInfo[]} [options.directPeers] peers with which we will maintain direct connections
@@ -199,7 +198,7 @@ class Gossipsub extends Pubsub {
      * Map of pending messages to gossip
      * peer id => control messages
      *
-     * @type {Map<string, Array<ControlIHave object>> }
+     * @type {Map<string, Array<RPC.IControlIHave object>> }
      */
     this.gossip = new Map()
 
@@ -207,7 +206,7 @@ class Gossipsub extends Pubsub {
      * Map of control messages
      * peer id => control message
      *
-     * @type {Map<string, ControlMessage object>}
+     * @type {Map<string, RPC.IControlMessage object>}
      */
     this.control = new Map()
 
@@ -237,17 +236,10 @@ class Gossipsub extends Pubsub {
     this.outbound = new Map()
 
     /**
-     * Use the overriden mesgIdFn or the default one.
-     */
-    // @ts-ignore
-    this.defaultMsgIdFn = (msg : InMessage) => utils.msgId(msg.from, msg.seqno)
-    this._msgIdFn = options.msgIdFn || this.defaultMsgIdFn
-
-    /**
      * A message cache that contains the messages for last few hearbeat ticks
      *
      */
-    this.messageCache = options.messageCache || new MessageCache(constants.GossipsubHistoryGossip, constants.GossipsubHistoryLength, this._msgIdFn)
+    this.messageCache = options.messageCache || new MessageCache(constants.GossipsubHistoryGossip, constants.GossipsubHistoryLength, this.getMsgId.bind(this))
 
     /**
      * A heartbeat timer that maintains the mesh
@@ -263,7 +255,7 @@ class Gossipsub extends Pubsub {
     /**
      * Tracks IHAVE/IWANT promises broken by peers
      */
-    this.gossipTracer = new IWantTracer(this._msgIdFn)
+    this.gossipTracer = new IWantTracer(this.getMsgId.bind(this))
 
     /**
      * libp2p
@@ -273,7 +265,7 @@ class Gossipsub extends Pubsub {
     /**
      * Peer score tracking
      */
-    this.score = new PeerScore(this._options.scoreParams, libp2p.connectionManager, this._msgIdFn)
+    this.score = new PeerScore(this._options.scoreParams, libp2p.connectionManager, this.getMsgId.bind(this))
   }
 
   // emitMessage (message: any): void {
@@ -292,7 +284,7 @@ class Gossipsub extends Pubsub {
    * @returns {RPC}
    */
   _decodeRpc (bytes: Uint8Array) {
-    return RPCCodec.decode(bytes)
+    return RPC.decode(bytes)
   }
 
   /**
@@ -303,7 +295,7 @@ class Gossipsub extends Pubsub {
    * @returns {Uint8Array}
    */
   _encodeRpc (rpc: RPC) {
-    return RPCCodec.encode(rpc)
+    return RPC.encode(rpc).finish()
   }
 
   /**
@@ -331,7 +323,7 @@ class Gossipsub extends Pubsub {
       }
     }
     // @ts-ignore
-    this.outbound.set(p, outbound)
+    this.outbound.set(p.id.toB58String(), outbound)
 
     // @ts-ignore
     return p
@@ -341,10 +333,9 @@ class Gossipsub extends Pubsub {
    * Removes a peer from the router
    * @override
    * @param {PeerId} peer
-   * @returns {Peer}
+   * @returns {PeerStreams | undefined}
    */
-  // @ts-ignore
-  _removePeer (peerId: PeerId): PeerStreams {
+  _removePeer (peerId: PeerId): PeerStreams | undefined {
     const peerStreams = super._removePeer(peerId)
     const id = peerId.toB58String()
 
@@ -398,18 +389,18 @@ class Gossipsub extends Pubsub {
   /**
    * Handles an rpc control message from a peer
    * @param {string} id peer id
-   * @param {ControlMessage} controlMsg
+   * @param {RPC.IControlMessage} controlMsg
    * @returns {void}
    */
-  _processRpcControlMessage (id: string, controlMsg: ControlMessage): void {
+  _processRpcControlMessage (id: string, controlMsg: RPC.IControlMessage): void {
     if (!controlMsg) {
       return
     }
 
-    const iwant = this._handleIHave(id, controlMsg.ihave)
-    const ihave = this._handleIWant(id, controlMsg.iwant)
-    const prune = this._handleGraft(id, controlMsg.graft)
-    this._handlePrune(id, controlMsg.prune)
+    const iwant = controlMsg.ihave ? this._handleIHave(id, controlMsg.ihave) : []
+    const ihave = controlMsg.iwant ? this._handleIWant(id, controlMsg.iwant) : []
+    const prune = controlMsg.graft ? this._handleGraft(id, controlMsg.graft) : []
+    controlMsg.prune && this._handlePrune(id, controlMsg.prune)
 
     if (!iwant.length && !ihave.length && !prune.length) {
       return
@@ -429,13 +420,14 @@ class Gossipsub extends Pubsub {
   // @ts-ignore
   async _processRpcMessage (msg: InMessage): Promise<void> {
     const msgID = this.getMsgId(msg)
+    const msgIdStr = messageIdToString(msgID)
 
     // Ignore if we've already seen the message
-    if (this.seenCache.has(msgID)) {
+    if (this.seenCache.has(msgIdStr)) {
       this.score.duplicateMessage(msg)
       return
     }
-    this.seenCache.put(msgID)
+    this.seenCache.put(msgIdStr)
 
     this.score.validateMessage(msg)
     // @ts-ignore
@@ -473,10 +465,10 @@ class Gossipsub extends Pubsub {
   /**
    * Handles IHAVE messages
    * @param {string} id peer id
-   * @param {Array<ControlIHave>} ihave
-   * @returns {ControlIWant}
+   * @param {Array<RPC.IControlIHave>} ihave
+   * @returns {RPC.IControlIWant}
    */
-  _handleIHave (id: string, ihave: ControlIHave[]): ControlIWant[] {
+  _handleIHave (id: string, ihave: RPC.IControlIHave[]): RPC.IControlIWant[] {
     if (!ihave.length) {
       return []
     }
@@ -510,18 +502,20 @@ class Gossipsub extends Pubsub {
       return []
     }
 
-    const iwant = new Set<string>()
+    // string msgId => msgId
+    const iwant = new Map<string, Uint8Array>()
 
     ihave.forEach(({ topicID, messageIDs }) => {
-      if (!topicID || !this.mesh.has(topicID)) {
+      if (!topicID || !messageIDs || !this.mesh.has(topicID)) {
         return
       }
 
       messageIDs.forEach((msgID) => {
-        if (this.seenCache.has(msgID)) {
+        const msgIdStr = messageIdToString(msgID)
+        if (this.seenCache.has(msgIdStr)) {
           return
         }
-        iwant.add(msgID)
+        iwant.set(msgIdStr, msgID)
       })
     })
 
@@ -539,7 +533,7 @@ class Gossipsub extends Pubsub {
       iask, iwant.size, id
     )
 
-    let iwantList = Array.from(iwant)
+    let iwantList = Array.from(iwant.values())
     // ask in random order
     shuffle(iwantList)
 
@@ -558,10 +552,10 @@ class Gossipsub extends Pubsub {
    * Handles IWANT messages
    * Returns messages to send back to peer
    * @param {string} id peer id
-   * @param {Array<ControlIWant>} iwant
-   * @returns {Array<Message>}
+   * @param {Array<RPC.IControlIWant>} iwant
+   * @returns {Array<RPC.IMessage>}
    */
-  _handleIWant (id: string, iwant: ControlIWant[]): Message[] {
+  _handleIWant (id: string, iwant: RPC.IControlIWant[]): RPC.IMessage[] {
     if (!iwant.length) {
       return []
     }
@@ -578,7 +572,7 @@ class Gossipsub extends Pubsub {
     const ihave = new Map<string, InMessage>()
 
     iwant.forEach(({ messageIDs }) => {
-      messageIDs.forEach((msgID) => {
+      messageIDs && messageIDs.forEach((msgID) => {
         const [msg, count] = this.messageCache.getForPeer(msgID, id)
         if (!msg) {
           return
@@ -591,7 +585,7 @@ class Gossipsub extends Pubsub {
           )
           return
         }
-        ihave.set(msgID, msg)
+        ihave.set(messageIdToString(msgID), msg)
       })
     })
 
@@ -607,10 +601,10 @@ class Gossipsub extends Pubsub {
   /**
    * Handles Graft messages
    * @param {string} id peer id
-   * @param {Array<ControlGraft>} graft
-   * @return {Array<ControlPrune>}
+   * @param {Array<RPC.IControlGraft>} graft
+   * @return {Array<RPC.IControlPrune>}
    */
-  _handleGraft (id: string, graft: ControlGraft[]): ControlPrune[] {
+  _handleGraft (id: string, graft: RPC.IControlGraft[]): RPC.IControlPrune[] {
     const prune: string[] = []
     const score = this.score.score(id)
     const now = this._now()
@@ -703,10 +697,10 @@ class Gossipsub extends Pubsub {
   /**
    * Handles Prune messages
    * @param {string} id peer id
-   * @param {Array<ControlPrune>} prune
+   * @param {Array<RPC.IControlPrune>} prune
    * @returns {void}
    */
-  _handlePrune (id: string, prune: ControlPrune[]): void {
+  _handlePrune (id: string, prune: RPC.IControlPrune[]): void {
     const score = this.score.score(id)
     prune.forEach(({ topicID, backoff, peers }) => {
       if (!topicID) {
@@ -832,10 +826,10 @@ class Gossipsub extends Pubsub {
 
   /**
    * Maybe attempt connection given signed peer records
-   * @param {PeerInfo[]} peers
+   * @param {RPC.IPeerInfo[]} peers
    * @returns {Promise<void>}
    */
-  async _pxConnect (peers: PeerInfo[]): Promise<void> {
+  async _pxConnect (peers: RPC.IPeerInfo[]): Promise<void> {
     if (peers.length > constants.GossipsubPrunePeers) {
       shuffle(peers)
       peers = peers.slice(0, constants.GossipsubPrunePeers)
@@ -863,7 +857,7 @@ class Gossipsub extends Pubsub {
       // This is not a record from the peer who sent the record, but another peer who is connected with it
       // Ensure that it is valid
       try {
-        const envelope = await (Envelope as EnvelopeClass).openAndCertify(pi.signedPeerRecord, 'libp2p-peer-record')
+        const envelope = await Envelope.openAndCertify(pi.signedPeerRecord, 'libp2p-peer-record')
         const eid = envelope.peerId.toB58String()
         if (id !== eid) {
           this.log(
@@ -1030,17 +1024,6 @@ class Gossipsub extends Pubsub {
   }
 
   /**
-   * Override the default implementation in BasicPubSub.
-   * If we don't provide msgIdFn in constructor option, it's the same.
-   * @override
-   * @param {Message} msg the message object
-   * @returns {string} message id as string
-   */
-  getMsgId (msg: InMessage): string {
-    return this._msgIdFn(msg)
-  }
-
-  /**
    * Publish messages
    *
    * @override
@@ -1055,8 +1038,9 @@ class Gossipsub extends Pubsub {
     }
 
     const msgID = this.getMsgId(msg)
+    const msgIdStr = messageIdToString(msgID)
     // put in seen cache
-    this.seenCache.put(msgID)
+    this.seenCache.put(msgIdStr)
 
     this.messageCache.put(msg)
 
@@ -1169,7 +1153,7 @@ class Gossipsub extends Pubsub {
   /**
    * @override
    */
-  _sendRpc (id: string, outRpc: RPC): void {
+  _sendRpc (id: string, outRpc: IRPC): void {
     const peerStreams = this.peers.get(id)
     if (!peerStreams || !peerStreams.isWritable) {
       return
@@ -1189,10 +1173,10 @@ class Gossipsub extends Pubsub {
       this.gossip.delete(id)
     }
 
-    peerStreams.write(RPCCodec.encode(outRpc))
+    peerStreams.write(RPC.encode(outRpc).finish())
   }
 
-  _piggybackControl (id: string, outRpc: RPC, ctrl: ControlMessage): void {
+  _piggybackControl (id: string, outRpc: IRPC, ctrl: RPC.IControlMessage): void {
     const tograft = (ctrl.graft || [])
       .filter(({ topicID }) => (topicID && this.mesh.get(topicID) || new Set()).has(id))
     const toprune = (ctrl.prune || [])
@@ -1203,14 +1187,14 @@ class Gossipsub extends Pubsub {
     }
 
     if (outRpc.control) {
-      outRpc.control.graft = outRpc.control.graft.concat(tograft)
-      outRpc.control.prune = outRpc.control.prune.concat(toprune)
+      outRpc.control.graft = outRpc.control.graft && outRpc.control.graft.concat(tograft)
+      outRpc.control.prune = outRpc.control.prune && outRpc.control.prune.concat(toprune)
     } else {
       outRpc.control = { ihave: [], iwant: [], graft: tograft, prune: toprune }
     }
   }
 
-  _piggybackGossip (id: string, outRpc: RPC, ihave: ControlIHave[]): void {
+  _piggybackGossip (id: string, outRpc: IRPC, ihave: RPC.IControlIHave[]): void {
     if (!outRpc.control) {
       outRpc.control = { ihave: [], iwant: [], graft: [], prune: [] }
     }
@@ -1226,7 +1210,7 @@ class Gossipsub extends Pubsub {
     const doPX = this._options.doPX
     for (const [id, topics] of tograft) {
       const graft = topics.map((topicID) => ({ topicID }))
-      let prune: ControlPrune[] = []
+      let prune: RPC.IControlPrune[] = []
       // If a peer also has prunes, process them now
       const pruning = toprune.get(id)
       if (pruning) {
@@ -1337,10 +1321,10 @@ class Gossipsub extends Pubsub {
   /**
    * Adds new IHAVE messages to pending gossip
    * @param {PeerStreams} peerStreams
-   * @param {Array<ControlIHave>} controlIHaveMsgs
+   * @param {Array<RPC.IControlIHave>} controlIHaveMsgs
    * @returns {void}
    */
-  _pushGossip (id: string, controlIHaveMsgs: ControlIHave): void {
+  _pushGossip (id: string, controlIHaveMsgs: RPC.IControlIHave): void {
     this.log('Add gossip to %s', id)
     const gossip = this.gossip.get(id) || []
     this.gossip.set(id, gossip.concat(controlIHaveMsgs))
@@ -1359,9 +1343,9 @@ class Gossipsub extends Pubsub {
    * @param {string} id
    * @param {string} topic
    * @param {boolean} doPX
-   * @returns {ControlPrune}
+   * @returns {RPC.IControlPrune}
    */
-  _makePrune (id: string, topic: string, doPX: boolean): ControlPrune {
+  _makePrune (id: string, topic: string, doPX: boolean): RPC.IControlPrune {
     if (this.peers.get(id)!.protocol === constants.GossipsubIDv10) {
       // Gossipsub v1.0 -- no backoff, the peer won't be able to parse it anyway
       return {
@@ -1372,7 +1356,7 @@ class Gossipsub extends Pubsub {
     // backoff is measured in seconds
     // GossipsubPruneBackoff is measured in milliseconds
     const backoff = constants.GossipsubPruneBackoff / 1000
-    const px: PeerInfo[] = []
+    const px: RPC.IPeerInfo[] = []
     if (doPX) {
       // select peers for Peer eXchange
       const peers = getGossipPeers(this, topic, constants.GossipsubPrunePeers, (xid: string): boolean => {
