@@ -4989,10 +4989,10 @@ libp2p-interfaces@^0.10.0, libp2p-interfaces@^0.10.4:
     streaming-iterables "^5.0.4"
     uint8arrays "^2.1.3"
 
-"libp2p-interfaces@npm:@galtproject/libp2p-interfaces@0.10.5":
-  version "0.10.5"
-  resolved "https://registry.yarnpkg.com/@galtproject/libp2p-interfaces/-/libp2p-interfaces-0.10.5.tgz#8eea1b4954188e4abd0956805a06e9e24bc521c8"
-  integrity sha512-I9HDfVR26JCOgjaAV7zzhm6iZVvKZkVaxOuiShxBlQa5LZ5ZDqwEoKEiVJ6gM5w7tWTcVE+KGacsESKXZb4I0w==
+"libp2p-interfaces@npm:@galtproject/libp2p-interfaces@0.10.6":
+  version "0.10.6"
+  resolved "https://registry.yarnpkg.com/@galtproject/libp2p-interfaces/-/libp2p-interfaces-0.10.6.tgz#25c5a9da2a7747ea2f312f7483e552dbbefb8506"
+  integrity sha512-XWx8+gYS5vo+P90f30gw08A8skimrysSBK18MJzUadlRCmsSW/lBQCicvex4WMDmX2Itfjs1CF/uWHK2My5tHQ==
   dependencies:
     "@types/bl" "^4.1.0"
     abort-controller "^3.0.0"
